@@ -1,0 +1,26 @@
+# load targets packages
+library(targets)
+library(tarchetypes)
+
+# source("packages.R")
+# devtools::load_all(".") # load all function definitions in /R
+
+# Set target-specific options such as packages.
+tar_option_set(
+  # packages = c("dplyr","readr","tidyverse","datasets"), # packages to make available to targets
+  # imports = "targetsDemo # watch changes in these functions to invalidate targets
+  envir = getNamespace("targetsDemo")
+)
+
+tar_plan(
+  tar_target(data_folder, "data", format = "file"), # format = "file" tracks the metadata of the file, not what's inside
+  tar_target(data_files, dir_ls(data_folder), format = "file"),
+  tar_target(raw, map_dfr(data_files, read_data)), # default format is is "rds". With the exception of format = "file, each target gets a file in _targets/objects
+
+  tar_target(rename_csv = "process/mapping.xlsx", format = "file"),
+  tar_target(rename, read_csv(rename_csv)),
+
+  tar_target(data, clean(raw, rename))
+)
+
+# IDE theme editor https://tmtheme-editor.glitch.me/

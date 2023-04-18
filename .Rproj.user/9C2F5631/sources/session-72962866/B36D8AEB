@@ -3,7 +3,7 @@
     "path": "~/GitHub/targetsIntro/_targets.R",
     "project_path": "_targets.R",
     "type": "r_source",
-    "hash": "407236494",
+    "hash": "0",
     "contents": "",
     "dirty": false,
     "created": 1681837645220.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "0,80",
-        "scrollLine": "0"
+        "cursorPosition": "41,0",
+        "scrollLine": "15"
     },
     "folds": "",
-    "lastKnownWriteTime": 1681837715,
+    "lastKnownWriteTime": 1681838994,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1681837715752,
+    "last_content_update": 1681838994082,
     "read_only": false,
     "read_only_alternatives": []
 }

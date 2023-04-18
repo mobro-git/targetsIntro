@@ -1,10 +1,7 @@
-# Create the "_targets.R" file with use_targets() - must first library(targets).
-# Then follow the manual to check and run the pipeline:
-#   https://books.ropensci.org/targets/walkthrough.html#inspect-the-pipeline # nolint
 
 # Load packages required to define the pipeline:
 library(targets)
-# library(tarchetypes) # Load other packages as needed. # nolint
+# library(tarchetypes) # Load other packages as needed.
 
 # Set target options:
 tar_option_set(
@@ -13,25 +10,33 @@ tar_option_set(
   # Set other options as needed.
 )
 
-# tar_make_clustermq() configuration (okay to leave alone):
-options(clustermq.scheduler = "multiprocess")
-
-# tar_make_future() configuration (okay to leave alone):
-# Install packages {{future}}, {{future.callr}}, and {{future.batchtools}} to allow use_targets() to configure tar_make_future() options.
-
 # Run the R scripts in the R/ folder with your custom functions:
 tar_source()
-# source("other_functions.R") # Source other scripts as needed. # nolint
+# source("other_functions.R") # Source other scripts as needed.
 
 # Replace the target list below with your own:
-list(
+list( # or tar_plan()
+
   tar_target(
-    name = data,
-    command = tibble(x = rnorm(100), y = rnorm(100))
-#   format = "feather" # efficient storage of large data frames # nolint
-  ),
+    name = data_folder,
+    command = "data",
+    format = "file"), # format = "file" tracks the metadata of the file, not what's inside. It should trigger a refresh if the contents of the file change
   tar_target(
-    name = model,
-    command = coefficients(lm(y ~ x, data = data))
+    name =
+      data_files,
+    command = dir_ls(data_folder),
+    format = "file"),
+  tar_target(
+    name = raw,
+    command = map_dfr(data_files, read_data)),
+  # default format is is "rds". With the exception of format = "file, each target gets a file in _targets/objects
+  # format = "feather" for efficient storage of large data frames
+
+  tar_target(rename_csv, "process/mapping.xlsx", format = "file"), # as with any function, you do not need to name all of your arguments
+  tar_target(rename, read_csv(rename_csv)),
+
+  tar_target(data, clean(raw, rename))
+
   )
-)
+
+# IDE theme editor https://tmtheme-editor.glitch.me/
