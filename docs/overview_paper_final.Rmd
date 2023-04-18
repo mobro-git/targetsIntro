@@ -1,0 +1,1004 @@
+---
+title: "Overview Paper Figures"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    theme: spacelab
+params:
+  mode: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = TRUE, warning = FALSE, message = FALSE, tidy = TRUE, cache = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+```
+
+# Setup
+
+```{r library}
+if(is.null(params$mode)) {
+  library(knitr)
+  library(targets)
+  library(tarchetypes)
+  library(ggplot2)
+  library(tidyverse)
+  library(ggh4x)
+  source("packages.R")
+  devtools::load_all(here())
+}
+```
+
+```{r tar_load}
+# config
+tar_load(config)
+
+# emf results data
+tar_load(clean_data)
+tar_load(clean_data_index)
+
+# IPCC AR6 Data
+tar_load(ipcc_ar6)
+
+# figure maps
+tar_load(figmap_op_band)
+tar_load(figmap_op_cone)
+tar_load(figmap_op_diffbar)
+tar_load(figmap_op_stackbar)
+tar_load(figmap_op_timeseries)
+```
+
+```{r supplementary data}
+data_final = make_supplementary_data(clean_data) %>%
+  filter(model %in% config$models_op & 
+           scenario %in% config$sm_scenarios & 
+           region == "United States")
+
+data_2050 = data_final %>% filter(year == 2050)
+
+data_w_aeo = clean_data %>%
+  filter(model %in% config$models_op_aeo & 
+           scenario %in% config$sm_scenarios & 
+           region == "United States")
+
+nontref = data_final %>% filter(scenario != "NT.Ref")
+```
+
+# Overview Paper Figures
+
+```{r}
+fig_no = 0
+sm_fig_no = 0
+```
+
+## Emissions
+
+### Net Zero Scenario CO2 Emissions, 2050
+
+```{r}
+fig_no = fig_no+1
+fig_no
+
+ref2020 = data_final %>%
+  filter(year == 2020 & scenario == "NT.Ref" & variable == "Emissions|CO2|Energy and Industrial Processes") %>%
+  mutate(label = "2020 Reference",
+         scenario = "Reference") %>%
+  select(model,scenario,year,value,label) %>%
+  mutate(scenario = factor(scenario, levels = c("Reference", "Net Zero", "Net Zero+")))
+
+fig <-
+  print_graph(
+    "stacked_bar",config,data_final,figmap_op_stackbar,7,"United States",
+    scenario_rename = TRUE,
+    level_var = c("Industrial Processes","Other","BECCS","Biofeedstock","DAC","Energy","LULUCF"),
+    level_scen = c("Reference", "Net Zero", "Net Zero+")) +
+  labs(title = "",
+       y = expression(bold("Mt CO"[2]*"/yr"))) +
+  geom_point(data = ref2020, aes(x = model, y = value, shape = label)) +
+  theme(axis.text.x = element_text(vjust = .51),
+        axis.title.y = element_text(face = "bold.italic")) +
+  geom_hline(yintercept = 0) 
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 10, height = 6)
+```
+
+Statistics:
+
+```{r}
+reduction = data_2050 %>%
+  filter(variable == "Emissions|CO2|Energy and Industrial Processes|Percent difference from 2020")
+
+ref_red = reduction %>% filter(scenario == "NT.Ref") %>% mutate(value = round(value,1))
+nz_ref = reduction %>% filter(scenario == "0by50.Ref") %>% mutate(value = round(value,1))
+nz_adv = reduction %>% filter(scenario == "0by50.Adv") %>% mutate(value = round(value,1))
+
+endog_lulucf = data_final %>%
+  filter(variable == "Carbon Sequestration|LULUCF" & value != -800)
+
+ind_process = unique((data_final %>% filter(variable == "Emissions|CO2|Industrial Processes"))$model)
+no_ind_process = config$models_op[!config$models_op %in% ind_process]
+```
+
+Range of gross emissions reductions is `r max(ref_red$value)`-`r min(ref_red$value)`% in NT.Ref, `r max(nz_ref$value)`-`r min(nz_ref$value)`% in 0by50.Ref, and `r max(nz_adv$value)`-`r min(nz_adv$value)`%, in 0by50.Adv. Models that did not include the exogenous -800 Mt CO2/yr assumption for LULUCF include `r unique(endog_lulucf$model)`. Models that did not report industrial process emissions: `r no_ind_process`
+
+### Sectoral Emissions, Difference from No Target Reference, 2050
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+subpalettes = create_subpalettes(figmap_op_stackbar, config)
+a_df = data_from_graph("stacked_bar",config,nontref,figmap_op_stackbar,9,"United States",
+                           scenario_rename = TRUE,
+                           level_var = c("Other","Petroleum Refining","Hydrogen","Buildings","Industry","Transportation","Electricity")) %>%
+  ungroup() %>%
+  select(model,scenario,region,unit,value,variable_rename) %>%
+  mutate(facet = "Residual Emissions")
+b_df = data_from_graph("diff_bar",config,data_final,figmap_op_diffbar,100,"United States",
+                           scenario_rename = TRUE,
+                           level_var = c("Other","Transportation","Industry","Buildings","Petroleum Refining","Hydrogen","Electricity")) %>%
+  ungroup() %>%
+  select(model,scenario,region,unit,diff,variable_rename) %>%
+  rename(value = diff) %>%
+  mutate(facet = "Difference from Reference")
+df = rbind(a_df, b_df) %>%
+  mutate(facet = factor(facet, levels = c("Residual Emissions","Difference from Reference")))
+
+fig <- ggplot() +
+  geom_bar(data = df,
+           aes(x = model, y = value, fill = variable_rename),
+           stat = "identity") +
+  facet_grid(facet ~ scenario, scales = "free_y") +
+  scale_subpalette(subpalettes, "Sector CO2 Emissions Only") +
+  labs(y = expression(bold("Mt CO"[2]*"/yr")), x = "") +
+  theme_emf() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51)) +
+  geom_hline(yintercept = 0, alpha = 0.5, color = "black")
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 9, height = 5)
+```
+
+Statistics:
+
+```{r}
+diff = data_2050 %>%
+  filter(scenario != "NT.Ref") %>% 
+  mutate(value = round(value,0))
+ 
+elcdiff2020 = diff %>% filter(variable == "Emissions|CO2|Energy|Supply|Electricity|Percent difference from 2020")  %>%
+  select(model,scenario,unit,year,value)
+elcdiffntref = diff %>% filter(variable == "Emissions|CO2|Energy|Supply|Electricity|Percent Difference from NT.Ref")  %>%
+  select(model,scenario,unit,year,value)
+
+blddiffntref = diff %>% filter(variable == "Emissions|CO2|Energy|Demand|Buildings|Percent Difference from NT.Ref") %>%
+  select(model,scenario,unit,year,value)
+inddiffntref = diff %>% filter(variable == "Emissions|CO2|Energy|Demand|Industry|Percent Difference from NT.Ref") %>%
+  select(model,scenario,unit,year,value)
+trndiffntref = diff %>% filter(variable == "Emissions|CO2|Energy|Demand|Transportation|Percent Difference from NT.Ref") %>%
+  select(model,scenario,unit,year,value)
+```
+
+*** NEED TO REVISIT SOME OF THESE STATS - DONT MATCH UP TO INDEXED VALUES AND NEED VERBAGE FOR DESCRIPTION ****
+
+Net zero scenario power sector emissions are reduced by no less than `r min(elcdiff2020$value)`% from 2020 to 2050, ranging from `r min(elcdiffntref$value)`-`r max(elcdiffntref$value)`% reductions over 2050 emissions in the no target reference scenario. Proportionate to reference scenario 2050 emissions, industrial emissions reduce between `r min(inddiffntref$value)`-`r max(inddiffntref$value)`%, buildings emissions reduce between `r min(blddiffntref$value)`-`r max(blddiffntref$value)`%, and transportation emissions reduce between `r min(trndiffntref$value)`-`r max(trndiffntref$value)`%.
+
+### Carbon Sequestration, 2050
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+fig <- print_graph("stacked_bar",config,data_final,figmap_op_stackbar,3,"United States",
+                    scenario_rename = TRUE,
+                    level_var = c("Fossil CCS","BECCS","DAC","LULUCF")) +
+  labs(title = "",
+       y = expression(bold("Mt CO"[2]*"/yr"))) +
+  theme(axis.text.x = element_text(vjust = .51))
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 9, height = 5)
+```
+
+## Carbon Price
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+fig <- print_graph("time_series",config,data_final,figmap_op_timeseries,8,"United States",
+                    scenario_rename = TRUE) +
+  labs(title = "",
+       y = expression(bold("2018$USD/t CO"[2])))
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 8, height = 4)
+```
+
+Statistics:
+
+```{r}
+price_diff <- data_2050 %>% 
+  filter(variable == "Price|Carbon|Difference from 0by50.Ref" & scenario == "0by50.Adv") %>%
+  mutate(value = round(value*-1,1))
+
+# TODO: which models didnt submit carbon prices?
+```
+
+Carbon prices are reduced by `r min(price_diff$value)`-`r max(price_diff$value)`% with the advanced technology assumptions
+
+## Final Energy
+
+### Final Energy, Difference from NT.Ref
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+subpalettes = create_subpalettes(figmap_op_diffbar, config)
+level_var = c("Synthetic Gas","Synthetic Liquids","Biogas","Biomass Liquids","Biomass Solids","Coal","Gas","Oil","Hydrogen","Electricity")
+level_scen = c("Reference", "Net Zero", "Net Zero+")
+
+diff_param = list(
+  plot_type = "diff_bar", config = config, emf_data_long = data_final, figmap = figmap_op_diffbar,
+  figure_num = 14, reg = "United States", scenario_rename = TRUE, level_var = level_var, level_scen = level_scen)
+
+ref_param = list(
+  plot_type = "stacked_bar", config = config, emf_data_long = data_final, figmap = figmap_op_stackbar,
+  figure_num = 6, reg = "United States", scenario_rename = TRUE, level_var = level_var, level_scen = level_scen)
+
+diff_df = do.call("data_from_graph", diff_param) %>%
+  ungroup() %>%
+  select(model,scenario,region,year,unit,diff,variable_rename) %>%
+  rename(value = diff) %>%
+  mutate(facet = case_when(
+    scenario == "Net Zero" ~ "Difference: Net Zero",
+    scenario == "Net Zero+" ~ "Difference: Net Zero+",
+    TRUE~"fix"))
+
+ref_df = do.call("data_from_graph", ref_param)  %>%
+  filter(scenario == "Reference") %>%
+  ungroup() %>%
+  select(model,scenario,region,unit,year,value,variable_rename) %>%
+  mutate(facet = "Reference")
+
+df = rbind(diff_df, ref_df) %>%
+  filter(year != 2020) %>%
+  mutate(facet = factor(facet, levels = c("Reference","Difference: Net Zero","Difference: Net Zero+")))
+
+hline_adv = df %>%
+  filter(facet == "Difference: Net Zero+" & !model %in% c("ADAGE","AnyMOD","EC-MSMR","EP-RIO","FECM-NEMS","gTech","TEMOA","US-REGEN","USREP-ReEDS"))
+hline_ref = df %>%
+  filter(facet == "Difference: Net Zero")
+hline = rbind(hline_adv,hline_ref)
+
+fig <- ggplot() +
+  geom_bar(data = df,
+           aes(x = year, y = value, fill = variable_rename),
+           stat = "identity") +
+  facet_grid(facet ~ model, scales = "free_y") +
+  facetted_pos_scales(
+    y = list(
+      facet == "Reference" ~ scale_y_continuous(limits = c(0, 100)),
+      facet == "Difference: Net Zero" ~ scale_y_continuous(limits = c(-50, 50)),
+      facet == "Difference: Net Zero+" ~ scale_y_continuous(limits = c(-50, 50))
+      )) +
+  geom_hline(data = hline, aes(yintercept = 0), color="black", linewidth=.5, alpha=0.7) +
+  scale_subpalette(subpalettes, "Final Energy") +
+  labs(y = "EJ/yr", x = "") +
+  theme_emf() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 20, height = 11)
+```
+
+```{r}
+finalnrg_diff2020 = data_2050 %>%
+  filter(variable == "Final Energy|Percent difference from 2020")
+
+finalnrg_diffntref = data_2050 %>%
+  filter(variable == "Final Energy|Percent difference from NT.Ref" &
+           scenario != "NT.Ref")
+```
+
+### Sector Final Energy, Difference from NT.Ref, 2050
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+df = data_from_graph("diff_bar",config,data_final,figmap_op_diffbar,12,"United States",
+                          scenario_rename = TRUE,
+                          level_scen = c("Reference","Net Zero","Net Zero+"),
+                          level_var = c("Synthetic Gas","Synthetic Liquids","Biogas","Biomass Liquids","Biomass Solids",
+                                             "Coal","Gas","Oil","Hydrogen","Electricity")) %>%
+  mutate(sector = case_when(
+    str_detect(variable, "Buildings") ~ "Buildings",
+    str_detect(variable, "Industry") ~ "Industry",
+    str_detect(variable, "Transportation") ~ "Transportation")) 
+
+sub_palettes = create_subpalettes(figmap_op_diffbar, config)
+
+fig = ggplot(df, aes(x = model, y = diff)) +
+  geom_col(aes(fill = variable_rename)) +
+  facet_grid(scenario~sector,
+               space = "free_x", scales = "fixed") +
+  labs(title = "",
+         x = "",
+         y = "EJ/yr",
+         fill = "") +
+  theme_emf() +
+  theme(axis.text.x = element_text(angle = 90, hjust=1)) +
+  scale_subpalette(sub_palettes, "Industry Final Energy Mix - Difference from NT.Ref") + 
+  theme(axis.text.x = element_text(vjust = .51)) +
+  geom_hline(yintercept = 0, alpha = 0.7, color = "black")
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 8, height = 6)
+```
+
+Statistics:
+
+```{r}
+subset = data_2050 %>%
+  mutate(value = round(value * -1,1))
+
+bld = subset %>% filter(variable == "Final Energy|Buildings|Percent difference from NT.Ref")
+bld_gas = subset %>% filter(variable == "Final Energy|Buildings|Gas|Percent difference from NT.Ref")
+ind_gas = subset %>% filter(variable == "Final Energy|Industry|Gas|Percent difference from NT.Ref")
+```
+
+There is strong consensus between models for buildings to transition away from gas, a `r min(bld$value)`-`r max(bld$value)`% reduction over reference, and significant total final energy demand decreases, a `r min(bld_gas$value)`-`r max(bld_gas$value)`% reduction over reference. All models show reductions in industrial gas demand, `r min(ind_gas$value)`-`r max(ind_gas$value)`% over the reference scenario. 
+
+## Electrification
+
+### Percent Elc of Final Energy, Time Series, Objective Values
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+vars = c("Final Energy|Percent Electricity", "Final Energy|Buildings|Percent Electricity",
+         "Final Energy|Industry|Percent Electricity","Final Energy|Transportation|Percent Electricity")
+
+elc = data_2050 %>% filter(variable %in% vars)
+
+ref_elc = clean_data %>%
+  filter(variable %in% vars & year == 2020 & model == "AEO2021") %>%
+  mutate(value = case_when(
+    variable == "Final Energy|Buildings|Percent Electricity" ~ 0.47, # number from Chioke, our number is wrong
+    variable == "Final Energy|Industry|Percent Electricity" ~ 0.13, # number calculated from AEO 2021, ~3 quads elc ~25 quads total
+    TRUE~value))
+
+elc_all = rbind(elc, ref_elc) %>%
+  mutate(
+    variable = case_when(
+      variable == "Final Energy|Percent Electricity" ~ "Total",
+      str_detect("Buildings", variable) ~ "Buildings",
+      str_detect("Industry", variable) ~ "Industry",
+      str_detect("Transportation", variable) ~ "Transportation",
+      TRUE ~ variable
+    ),
+    scenario = case_when(
+      scenario == "NT.Ref" ~ "Reference",
+      scenario == "0by50.Ref" ~ "Net Zero",
+      scenario == "0by50.Adv" ~ "Net Zero+",
+      TRUE ~ scenario),
+    year = case_when(
+      year == 2020 ~ "2020 Reference",
+      year == 2050 ~ "2050"
+    )) %>%
+  mutate(value = value * 100) %>%
+  mutate(
+    scenario = factor(scenario, levels = c("Reference", "Net Zero", "Net Zero+")),
+    variable = factor(variable, levels = c("Total", "Transportation", "Industry", "Buildings")))
+
+means = elc_all %>%
+  filter(year == 2050) %>%
+  group_by(variable,scenario) %>%
+  summarise(value = mean(value)) %>%
+  mutate(year = "2050 Mean")
+
+ref_points = elc_all %>% filter(year == "2020 Reference")
+mod_points = elc_all %>% filter(year == "2050")
+  
+sub_palettes = create_subpalettes(figmap_op_timeseries, config)
+shapes <- c("2020 Reference"=18, "2050"=16, "2050 Mean"=17)
+
+fig <- ggplot() +
+  geom_point(data=mod_points, aes(x=scenario,y=value, color=model, shape = year)) +
+  geom_line(data=mod_points, aes(x=scenario,y=value, group = model, color=model), linewidth = 1, alpha = .85) +
+  geom_point(data=ref_points, aes(x=scenario,y=value, shape = year), size = 4, color = "black") +
+  geom_point(data = means, aes(x=scenario,y=value, shape = year), size = 3, color = "black") +
+  facet_grid(~variable) +
+  labs(title = "",
+       x="", y = "Electricity Share in Final Energy (%)") +
+  theme_emf() +
+  scale_subpalette(sub_palettes, "Percent Electricity") +
+  scale_shape_manual(values = shapes) +
+  theme(axis.text.x = element_text(angle = 90, hjust = .51)) +
+  guides(color = guide_legend(ncol=1))
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 10, height = 6)
+```
+
+Statistics:
+
+```{r}
+subset = data_2050 %>% 
+  filter(scenario != "NT.Ref") %>%
+  mutate(value = round(value * 100,1))
+elcbld = subset %>% filter(variable == "Final Energy|Buildings|Percent Electricity")
+elcind = subset %>% filter(variable == "Final Energy|Industry|Percent Electricity")
+elctrn = subset %>% filter(variable == "Final Energy|Transportation|Percent Electricity")
+elctot = subset %>% filter(variable == "Final Energy|Percent Electricity")
+```
+
+Across net zero scenarios, there is a much steeper increase in that proportion from 2020 to 2050, `r min(elcbld$value)`-`r max(elcbld$value)`% for buildings, `r min(elcind$value)`-`r max(elcind$value)`% in industry, and `r min(elctrn$value)`-`r max(elctrn$value)`% in transportation, leading to a total increase of `r min(elctot$value)`-`r max(elctot$value)`%. 
+
+### Generation Mix, Difference from NT.Ref
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+nogtech <- clean_data %>% 
+  filter(model != "gTech" & year != 2020) %>%
+  mutate(label = "Net")
+
+param = list(
+  plot_type = "diff_bar", 
+  config = config, 
+  emf_data_long = nogtech, 
+  figmap = figmap_op_diffbar,
+  figure_num = 7, 
+  reg = "United States", 
+  scenario_rename = TRUE,
+  level_var = c("Wind","Solar","Hydrogen","Hydro","Biomass","Coal","Gas","Oil","Nuclear","Other"))
+
+hline_adv = do.call("data_from_graph",param) %>%
+  filter(scenario == "Net Zero+" & !model %in% c("ADAGE","EC-MSMR","FECM-NEMS","TEMOA","USREP-ReEDS"))
+hline_ref = do.call("data_from_graph",param) %>%
+  filter(scenario == "Net Zero")
+hline = rbind(hline_adv,hline_ref)
+
+fig <- do.call("print_graph",param) + 
+  labs(title = "",
+       x="") + 
+  geom_hline(data = hline, aes(yintercept = 0), color="black", linewidth=.75, alpha=0.7) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.x = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.y = element_text(size = 11, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 16, height = 8)
+```
+
+## Net-Zero Pathways
+
+### Literature Comparison
+
+```{r}
+# EMF <--> Comparison variable and axis mapping
+var_map = readxl::read_xlsx("data-raw/extra-data/bistline_var_map.xlsx")
+
+# Read in comparison data
+comp = readxl::read_xlsx("data-raw/extra-data/bistline_scatter.xlsx") %>%
+  pivot_longer(cols = `elsr (% final)`:`ffr (% 2015)`, names_to = "bistline_var", values_to = "value") %>%
+  left_join(var_map, by = "bistline_var", relationship = "many-to-many") %>%
+  filter(!Region %in% c("China","Japan","Mexico")) %>%
+  mutate(
+    `CO2 Target` = case_when(
+      `CO2 Target` == "DD" ~ "Deep Decarbonization",
+      `CO2 Target` == "NZ" ~ "Net Zero",
+      `CO2 Target` == "REF" ~ "Reference",
+      `CO2 Target` == "BASE" ~ "2015"),
+    Region = case_when(
+      Region == "OECD" ~ "OECD: IPCC SR15",
+      Region == "United States" ~ "US: EMF 37",
+      TRUE~Region), 
+    Region = case_when(
+      !Region %in% c("OECD: IPCC SR15", "US: EMF 37") ~ paste(Region,"*",sep=""),
+      TRUE~Region)
+    )
+
+# color, shape, alpha palettes
+var_palette = c(unique(comp$Region),"US: IPCC AR6")
+names(var_palette) = var_palette
+sub_palettes[["comparisons"]] = var_palette
+sub_palettes = sub_palettes %>%
+  map(~find_color(.x, color_map))
+
+shapes <- c("2015" = 4, "Deep Decarbonization" = 17, "Net Zero" = 16, "Reference" = 1)
+```
+
+```{r}
+df_comp = comp %>% 
+  filter(figure == 1 & !Region %in% c("Asia*","EU*","Latin America*")) %>% 
+  select(-bistline_var,-figure,-axis_title,-bistline_var_no,-emf_var) %>%
+  mutate(value = value*100) %>%
+  pivot_wider(names_from = axis, values_from = value) %>%
+  mutate(source = "Literature") %>%
+  select(`CO2 Target`,Region,x,y,source)
+
+df_emf = data_2050 %>% 
+  filter(variable %in% c("Final Energy|Percent Electricity","Final Energy|Electricity|Percent of 2015")) %>%
+  select(model,scenario,region,value,variable) %>%
+  filter(value != Inf) %>%
+  pivot_wider(names_from = "variable", values_from = "value") %>%
+  rename(x = `Final Energy|Percent Electricity`,
+         y = `Final Energy|Electricity|Percent of 2015`,
+         Region = region) %>%
+  mutate(
+    `CO2 Target` = case_when(scenario == "NT.Ref" ~ "Reference",
+                             scenario != "NT.Ref" ~ "Net Zero"),
+    source = "EMF37",
+    x = x * 100,
+    Region = "US: EMF 37"
+  ) %>%
+  select(`CO2 Target`,Region,x,y,source)
+
+fig_a = ggplot() + 
+  geom_point(data = ipcc_ar6$ipcc_a , aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 2.4, alpha = 0.5) + 
+  geom_point(data = df_comp, aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 2.4, alpha = 0.4) + 
+  geom_point(data = df_emf, aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 3) + 
+  scale_subpalette(sub_palettes, "comparisons") +
+  theme_emf() +
+  theme(axis.title.x = element_text(face="bold")) +
+  labs(y = "Electricity Demand (% 2015)",
+       x = "Electricity Share in Final Energy (%)",
+       title = "a.") +
+  scale_shape_manual(values = shapes) +
+  nolegend
+fig_a
+```
+
+```{r}
+df_comp = comp %>% 
+  filter(figure == 4 & !Region %in% c("Asia*","EU*","Latin America*")) %>% 
+  # filter(`CO2 Target` != "2015") %>%
+  filter(!(Region == "Asia*" & `CO2 Target` == "Reference")) %>%
+  select(-bistline_var,-figure,-axis_title,-bistline_var_no,-emf_var) %>%
+  mutate(value = value * 100) %>%
+  pivot_wider(names_from = axis, values_from = value) %>%
+  mutate(source = "Literature") %>%
+  select(`CO2 Target`,Region,x,y,source)
+
+df_emf = data_2050 %>% 
+  filter(variable %in% c("Primary Energy|Fossil|Percent difference from 2015","Emissions|CO2|Percent difference from 2015")) %>%
+  filter(model != "ADAGE") %>%
+  select(model,scenario,region,value,variable) %>%
+  mutate(value = value*-1) %>%
+  filter(value != -Inf) %>%
+  pivot_wider(names_from = "variable", values_from = "value") %>%
+  rename(x = `Primary Energy|Fossil|Percent difference from 2015`,
+         y = `Emissions|CO2|Percent difference from 2015`,
+         Region = region) %>%
+  mutate(`CO2 Target` = case_when(scenario == "NT.Ref" ~ "Reference",
+                                  scenario != "NT.Ref" ~ "Net Zero"),
+         source = "EMF37",
+    Region = "US: EMF 37") %>%
+  select(`CO2 Target`,Region,x,y,source)
+
+# TODO: IPCC emissions and fossil fuel reductions still need to be figured out
+test = ipcc_ar6$ipcc_b %>%
+  filter(x > 30 & y > 30 & x < 100 & y < 100)
+
+fig_b = ggplot() + 
+  geom_point(data = test, aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 2.4, alpha = 0.4) + 
+  geom_point(data = df_comp, aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 2.4, alpha = 0.4) + 
+  geom_point(data = df_emf, aes(x = x, y = y, color = Region, shape = `CO2 Target`), size = 3) + 
+  scale_subpalette(sub_palettes, "comparisons") +
+  theme_emf() +
+  theme(axis.title.x = element_text(face="bold")) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Fossil Fuel Reduction from 2015 (%)",
+       # y = "Gross Economy CO2 Reductions from 2015 (%)",
+       y = expression(bold("Gross Economy CO"[2]*" Reductions from 2015 (%)")),
+       title = "b.")
+fig_b
+```
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+both = fig_a + fig_b + plot_layout(guides = 'collect')
+both
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 12, height = 5)
+```
+
+### Energy and Emissions Summary w/ Carbon Price
+
+```{r}
+fig_no = fig_no+1 
+fig_no
+
+co2price = data_2050 %>% 
+  filter(scenario == "0by50.Ref" & variable == "Price|Carbon") %>% 
+  mutate(variable = "CO2 Emissions",
+         # label = paste("$",round(value,0),sep=""),
+         label = round(value,0),
+         legend = "CO2 Price (2018$USD/ton)")
+
+fig <- print_graph("stacked_bar",config,nontref,figmap_op_stackbar,15.1,"United States",
+                   level_var = c("CO2 Emissions","Fossil Energy Demand","Total Energy Demand","Electricity Demand")) +
+  #facet_grid(.~model) +
+  facet_wrap(~model, nrow = 2) +
+  geom_point(data = co2price, aes(x=variable,y=value/600, shape = legend), color = "#2A4849") +
+  geom_text_repel(data = co2price, 
+            aes(x=variable,y=value/600, label = label), 
+            nudge_x = .15, nudge_y = .15, color = "#2A4849", size = 4, fontface = "bold") +
+  bottom1 +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        strip.text.x = element_text(size = 9)) +
+  labs(y = "Annual Rate of Change 2020-2050 (%)", title = "")
+fig
+ggsave(paste("output/round2/op/finals/fig",fig_no,".png",sep=""), width = 9, height = 5)
+```
+
+# Supplementary Materials
+
+## Calibration
+
+### GDP 
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+
+gdp_df = data_w_aeo %>% filter(!model %in% c("NATEM","gTech"))
+
+fig_a = print_graph("time_series",config,gdp_df,figmap_op_timeseries,12.1,"United States",
+                     scenario_rename = TRUE) +
+  labs(x="",title = "a.",y = "Billion 2018$USD/yr")
+fig_a
+fig_b = print_graph("time_series",config,gdp_df,figmap_op_timeseries,12.2,"United States",
+                     scenario_rename = TRUE) +
+  labs(title = "b.",
+       y = "GDP % Difference from AEO 2022",
+       x="")
+fig_b
+both = fig_a + fig_b + plot_layout(guides = 'collect')
+both
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 8, height = 4)
+```
+
+### Population
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig = print_graph("time_series",config,data_w_aeo,figmap_op_timeseries,13,"United States",
+                     scenario_rename = TRUE) +
+  labs(x="",title = "",y="Million People")
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 6, height = 4)
+```
+
+## Emissions
+
+### Sectoral Emissions
+
+#### By Model, Absolute Values
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig = print_graph("stacked_bar",config,data_final,figmap_op_stackbar,8.1,"United States",
+                     scenario_rename = TRUE,
+                  level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(x="",title = "",y = expression(bold("Mt CO"[2]*"/yr"))) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+#### By Model, Difference from Net Zero
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+
+subpalettes = create_subpalettes(figmap_op_diffbar, config)
+
+df = data_from_graph("diff_bar",config,nontref,figmap_op_diffbar,100.1,"United States") %>%
+  ungroup() %>%
+  select(model,scenario,region,unit,diff,variable_rename) %>%
+  rename(value = diff) %>%
+  mutate(facet = "Net Zero +: Difference from Net Zero")
+
+fig <- ggplot() +
+  geom_bar(data = df,
+           aes(x = model, y = value, fill = variable_rename),
+           stat = "identity") +
+  facet_grid(. ~ facet, scales = "free_y") +
+  scale_subpalette(subpalettes, "Sector CO2 Emissions Only- Difference from 0by50.Ref") +
+  labs(y = expression(bold("Mt CO"[2]*"/yr")), x = "") +
+  theme_emf() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51)) +
+  geom_hline(yintercept = 0, alpha = 0.5, color = "black")
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 5, height = 4)
+```
+
+### Carbon Capture and Removals
+
+#### Total
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig = print_graph("stacked_bar",config,data_final,figmap_op_stackbar,3.1,"United States",
+                     scenario_rename = TRUE) +
+  labs(x="",title = "",y = expression(bold("Mt CO"[2]*"/yr"))) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+#### Carbon Capture Accounting
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+
+df = data_from_graph("stacked_bar",config,nontref,figmap_op_stackbar,102,"United States",
+                     scenario_rename = TRUE,
+                     level_scen = c("Reference","Net Zero","Net Zero+")) %>%
+  filter(year == 2050) %>%
+  mutate(capture = case_when(
+    str_detect(variable, "Biomass") ~ "BECCS",
+    TRUE~"Fossil CCS"
+  ))
+
+sub_palettes = create_subpalettes(figmap_op_stackbar, config)
+
+fig = ggplot(df, aes(x = model, y = value)) +
+  geom_col(aes(fill = variable_rename)) +
+  facet_grid(scenario~capture,
+               space = "free_x", scales = "fixed") +
+  theme_emf() +
+  theme(axis.text.x = element_text(angle = 90, hjust=1)) +
+  scale_subpalette(sub_palettes, "CCS Accounting") + 
+  theme(axis.text.x = element_text(vjust = .51)) +
+  geom_hline(yintercept = 0, alpha = 0.7, color = "black") +
+  labs(y = expression(bold("Captured Carbon (Mt CO"[2]*"/yr)")),
+       title="",
+       x="")
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 9, height = 5)
+```
+
+#### Power Sector Emissions and Carbon Capture
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig <- print_graph("stacked_bar",config,nontref,figmap_op_stackbar,100,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(y = expression(bold("Power Sector Emissions and CCS (Mt CO"[2]*"/yr)")),title="") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+#### Industry Emissions and Carbon Capture
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+
+norio = nontref %>% filter(model != "EP-RIO")
+
+fig <- print_graph("stacked_bar",config,norio,figmap_op_stackbar,101,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(y = expression(bold("Industrial Emissions and CCS (Mt CO"[2]*"/yr)")),title="") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+## Final Energy
+
+### Absolute Values, Tme Series
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig = print_graph("stacked_bar",config,data_final,figmap_op_stackbar,6.5,"United States",
+                   scenario_rename = TRUE,
+                   level_scen = c("Reference", "Net Zero", "Net Zero+"),
+                   level_var = c("Synthetic Gas","Synthetic Liquids","Biogas","Biomass Liquids","Biomass Solids","Coal","Gas","Oil","Hydrogen","Electricity")) +
+  labs(title = "",y="Final Energy (EJ/yr)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+Statistics:
+
+```{r}
+#TODO: Need to rework all of these stats, changed with updated results and inclusion of more models
+#TODO: add stats for annual growth rate of electricity to compare how quickly it grows in NT.Ref vs 0by50 scenarios
+
+finalnrg2020 = data_2050 %>%
+  filter(variable == "Final Energy|Percent difference from 2020") %>%
+  mutate(value = round(value,1))
+
+diff2020ntref = finalnrg2020 %>% filter(scenario == "NT.Ref" & model != "US-REGEN")
+diff2020ntref_usregen = finalnrg2020 %>% filter(scenario == "NT.Ref") %>% filter(model == "US-REGEN")
+diff2020nzref = finalnrg2020 %>% filter(scenario == "0by50.Ref" & !model %in% c("ADAGE", "EC-MSMR")) %>% mutate(value = value * -1)
+diff2020nzref_adage = finalnrg2020 %>% filter(scenario == "0by50.Ref" & model == "ADAGE")
+diff2020nzref_ecmsmr = finalnrg2020 %>% filter(scenario == "0by50.Ref" & model == "EC-MSMR")
+diff2020nzadv = finalnrg2020 %>% filter(scenario == "0by50.Adv" & model != "GCAM")
+diff2020nzadv_gcam = finalnrg2020 %>% filter(scenario == "0by50.Adv" & model == "GCAM")
+
+finalnrgntref = data_2050 %>%
+  filter(variable == "Final Energy|Percent difference from NT.Ref") %>%
+  mutate(value = round(value * -1,1))
+
+diffntref_nzref = finalnrgntref %>% filter(scenario == "0by50.Ref" & model != "ADAGE")
+diffntref_nzref_adage = finalnrgntref %>% filter(scenario == "0by50.Ref" & model == "ADAGE")
+diffntref_nzadv = finalnrgntref %>% filter(scenario == "0by50.Adv")
+
+fuels = data_2050 %>%
+  mutate(value = round((value * -1)/30,1))
+
+oilnrg = fuels %>% filter(variable == "Final Energy|Oil|Percent difference from 2020" & scenario == "0by50.Ref") 
+
+gasnrg_all = fuels %>% filter(variable == "Final Energy|Gas|Percent difference from 2020" & scenario == "0by50.Ref")
+gasnrg_sm = gasnrg_all %>% filter(!model %in% c("ADAGE","gTech"))
+gasnrg_adage = gasnrg_all %>% filter(model == "ADAGE")
+gasnrg_gtech = gasnrg_all %>% filter(model == "gTech")
+
+elcnrg = data_2050 %>%
+  filter(variable == "Final Energy|Electricity|Percent difference from 2020") %>%
+  mutate(value = round((value)/30,1))
+elcnrgnzref = elcnrg %>% filter(scenario == "0by50.Ref")
+elcnrgntref = elcnrg %>% filter(scenario == "NT.Ref")
+```
+
+Final energy demand increases in the reference scenario from 2020 to 2050 for all by one model by `r min(diff2020ntref$value)`-`r max(diff2020ntref$value)`% (US-REGEN, `r diff2020ntref_usregen$value`%) and decreases for most models in the net zero reference and advanced scenarios, `r max(diff2020nzref$value)`-`r min(diff2020nzref$value)`% (except ADAGE, +`r diff2020nzref_adage$value`%, and EC-MSMR, +`r diff2020nzref_ecmsmr$value`%) and `r max(diff2020nzadv$value)`-`r min(diff2020nzadv$value)`% (except GCAM, `r diff2020nzadv_gcam$value`%) respectively. Total final energy demand in 2050 decreases from the reference to the net zero reference scenario in most models by `r min(diffntref_nzref$value)`-`r max(diffntref_nzref$value)`% (except ADAGE, `r diffntref_nzref_adage$value`%), and a similar range to the net zero advanced scenario, `r min(diffntref_nzadv$value)`-`r max(diffntref_nzadv$value)`%. Final demand for gas and oil consumption falls from 2020 to 2050 in the net zero reference scenario for almost all models, by `r min(gasnrg_sm$value)`-`r max(gasnrg_sm$value)`% per year (except ADAGE, `r gasnrg_adage$value`%, and gTech, `r gasnrg_gtech$value`%) and `r min(oilnrg$value)`-`r max(oilnrg$value)`% per year, respectively. Electricity demand in the net zero reference scenarios grows slightly faster, `r min(elcnrgnzref$value)`-`r max(elcnrgnzref$value)`% per year, than in the no target reference, `r min(elcnrgntref$value)`-`r max(elcnrgntref$value)`% per year.
+
+### Buildings
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig <- print_graph("stacked_bar",config,data_final,figmap_op_stackbar,23,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title="",x="",y="Buildings Final Energy (EJ/yr)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+### Industry
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig <- print_graph("stacked_bar",config,data_final,figmap_op_stackbar,24,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title="",x="",y="Industry Final Energy (EJ/yr)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+### Transportation
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig <- print_graph("stacked_bar",config,data_final,figmap_op_stackbar,25,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title="",x="",y="Transportation Final Energy (EJ/yr)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+## Electricity Generation
+
+### Totals
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+nogtech = data_final %>% filter(model != "gTech")
+fig <- print_graph("stacked_bar",config,nogtech,figmap_op_stackbar,20,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title = "") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 15, height = 5)
+```
+
+### Combustion w/ and w/o CCS
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+noecmsmr = data_final %>% filter(!model %in% c("EC-MSMR","EPS"))
+fig <- print_graph("stacked_bar",config,noecmsmr,figmap_op_stackbar,21,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title = "") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 11, height = 5)
+```
+
+### Non-Combustion w/ and w/o CCS
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+df_filtered = data_final %>% filter(!model %in% c("ADAGE","FARM","gTech"))
+fig <- print_graph("stacked_bar",config,df_filtered,figmap_op_stackbar,22,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title = "") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 8, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 11, height = 5)
+```
+
+## Hydrogen Production
+
+```{r}
+sm_fig_no = sm_fig_no+1
+sm_fig_no
+fig <- print_graph("stacked_bar",config,data_final,figmap_op_stackbar,103,"United States",
+                     scenario_rename = TRUE,
+                   level_scen = c("Reference","Net Zero","Net Zero+")) +
+  labs(title = "") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = .51),
+        strip.text.y = element_text(size = 10, color = "black",face = "bold"),
+        strip.text.x = element_text(size = 10, color = "black",face = "bold")) +
+  bottom1
+fig
+ggsave(paste("output/round2/op/finals/supmat/fig",sm_fig_no,".png",sep=""), width = 12, height = 5)
+```
+
+

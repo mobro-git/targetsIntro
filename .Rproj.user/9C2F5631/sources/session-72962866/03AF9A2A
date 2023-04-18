@@ -1,26 +1,26 @@
 {
-    "id": "E8896BE9",
+    "id": "03AF9A2A",
     "path": "~/GitHub/targetsIntro/README.md",
     "project_path": "README.md",
     "type": "markdown",
-    "hash": "3973584000",
+    "hash": "4051078562",
     "contents": "",
     "dirty": false,
-    "created": 1681837951082.0,
+    "created": 1681839309214.0,
     "source_on_save": false,
-    "relative_order": 4,
+    "relative_order": 1,
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "8,0",
+        "cursorPosition": "22,0",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1681839067,
+    "lastKnownWriteTime": 1681839727,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1681839067188,
+    "last_content_update": 1681839727707,
     "read_only": false,
     "read_only_alternatives": []
 }

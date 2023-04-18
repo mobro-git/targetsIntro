@@ -1,21 +1,8 @@
-# 
+# EMF37viz
 
+Code for interactive exploration, QA, and visualization of EMF37 data.
 
-Create the "_targets.R" file with `use_targets()` - must first library(targets).
-
-You can get a quick walkthrough of a targets package at:
-https://books.ropensci.org/targets/walkthrough.html#inspect-the-pipeline # nolint
-
-# targetsIntro
-
-Introduction to the targets pipeline for efficient reproducability.
-
-## Setup:
-
-This introduction assumes project as package as pipeline. Aka we are working within a project (targetsIntro) that is set up as a package (targetsIntro) and are using the targets pipeline within it. 
-
-To set up a project as a package: 
-File > New Project > 
+## Files and Folders:
 
 Model-scenario data are in /data-raw/model-runs and pulled from IIASA database api.
 templates are in /data-raw/templates
@@ -245,4 +232,3 @@ Use the plot function above as a guideline to determine what information we need
 3) change `R/4c_figure_data_processing.R` file: Add figure specific processing function. Make sure to use consistent naming convention. 
 
 4) change the `approved_plot_type` and the `call_plot_fn` functions in the `R/4c_figure_plotting_fn.R` file to support the new capability.
-
