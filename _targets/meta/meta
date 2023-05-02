@@ -1,0 +1,11 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
+clean|function|281faa18dc4749cd|||||||||||||||
+data|stem|4c58e13a77df3bab|dfd2eac88d6e812c|bc5c2216bc9e87ff|1588979285||t19466.7301129629s|9e72c3d6f11d2155|211953|rds|local|vector|||0.13||
+data_files|stem|75174ef48f87bfeb|ea2c63a76a444ff2|42f72618a85c5e7b|31038078|data/EIA1.csv*data/EIA2.xlsx|t19465.6930572519s|f7e330a22740ca5d|433426|file|local|vector|||0.01||
+data_folder|stem|75174ef48f87bfeb|4c17c435d51104b3|ef46db3751d8e999|-1589943188|data|t19465.6930572519s|f7e330a22740ca5d|433426|file|local|vector|||0||
+EIA1|object|71fe218dcb65f6b0|||||||||||||||
+export|stem|794be3614d98cc38|512724679df67aff|fc31ec4abbeb667b|677160269||t19466.7301455118s|a1c456b03adbfbf8|44|rds|local|vector|||2.77||
+raw|stem|7d73265a4684e6b9|c1383255ad90e751|09af582793f39db7|1775868223||t19466.7301069363s|59b6b3db44b7d7a0|157575|rds|local|vector|||1.43||
+read_data|function|545cde36893368f8|||||||||||||||
+rename|stem|2d0e128931650f26|ed8d131885b140a1|91f54fc6c9bafa03|-2023350008||t19466.7300867993s|1b53092e3910d288|266|rds|local|vector|||0.28||
+rename_csv|stem|9422ad6166497c99|bc99cf3cdce758af|ef46db3751d8e999|795331852|process/mapping.xlsx|t19466.6258725921s|a0f8b837bb353bd6|8765|file|local|vector|||1.84|package tidyverse was built under R version 4.2.3. package ggplot2 was built under R version 4.2.3. package tibble was built under R version 4.2.3. package tidyr was built under R version 4.2.3. package readr was built under R version 4.2.3. package purrr was built under R version 4.2.3. package dplyr was built under R version 4.2.3. package stringr was built under R version 4.2.3. package forcats was built under R version 4.2.3. package lubridate was built under R version 4.2.3. package fs was built under R version 4.2.3. package readxl was built under R version 4.2.3|

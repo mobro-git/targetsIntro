@@ -1,17 +1,17 @@
 Package: targetsIntro
 Type: Package
-Title: Intro to targets pipelines
+Title: What the Package Does (Title Case)
 Version: 0.1.0
-Author: Morgan Browning
-Maintainer: browning.morgan@epa.gov
-Description: This project will walk you through a simple example building a Targets pipeline from scratch.
-    The project is designed as a package to facilitate development.
-License: NA
-Imports: 
-    tidyverse,
-    dplyr,
-    readr,
-    tidyr,
-    fs
+Author: Who wrote it
+Maintainer: The package maintainer <yourself@somewhere.net>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: What license is it under?
 Encoding: UTF-8
 LazyData: true
+Imports: 
+    dplyr,
+    ggplot2,
+    purrr,
+    readr,
+    units

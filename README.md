@@ -13,10 +13,11 @@ You can get a quick walkthrough of a targets package at https://books.ropensci.o
 
 ## Getting Started:
 
-The data pipeline is managed via targets. The overall plan is listed in _targets.R. To run the project, from the console run: ```targets::tar_make()``` from the project working directory. (e.g., via opening the EMF37.Rproj file). Final results are html and text in /outputs. 
+See the `_targets.R` file for a walkthrough of pipeline development.
 
-TO run the project interactively:
-1) Load packages: ```source("packages.R")```
-2) Load custom functions: ```devtools::load_all(".")```
-3) Load cached intermediate objects: ```targets::tar_load(everything())``` (or specify names of particular targets to load). ```targets::tar_load(everything())``` will take a long while to load everything into the environment. Loading particular targets is advised. 
+Basic pipeline functions:
+`tar_manifest` to see if the targets and commands are actually the ones we expect.
+`tar_visnetwork` to see the dependency graph and check that there is a natural, connected flow of work from left to right. `tar_visnetwork(targets_only = TRUE)` to exclude functions and see only named targets.
+`tar_make` to run the targets in the correct order, based on their dependencies, and saves the results to files. The files live in a folder called `_targets` in a subfolder called `objects`. The `tar_read` function loads the data from an object and brings it back into your session for interactive viewing and use. You can make specific targets by running `tar_make(targetName)`, which only makes that target's dependencies and then the target, skipping the rest of the pipeline. 
+`tar_oudated()` checks the targets to see if they're out of data, aka if one of their dependencies has changed. If there are no outdated targets, this function will return `0`.
 
